@@ -1,0 +1,7 @@
+node_modules/
+references/*.png
+references/*.jpg
+references/*.jpeg
+references/*.webp
+*.tmp
+.DS_Store
