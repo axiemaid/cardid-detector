@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Card ID Detector</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e4e4e7;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .subtitle { color: #71717a; font-size: 0.875rem; margin-bottom: 32px; }
+  .upload-zone {
+    border: 2px dashed #3f3f46;
+    border-radius: 12px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: #18181b;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: #6366f1;
+    background: #1c1c25;
+  }
+  .upload-zone .icon { font-size: 3rem; margin-bottom: 12px; }
+  .upload-zone p { color: #a1a1aa; font-size: 0.875rem; }
+  .upload-zone input { display: none; }
+  #preview {
+    margin-top: 24px;
+    display: none;
+  }
+  #preview img {
+    max-width: 300px;
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  #status {
+    margin-top: 16px;
+    font-size: 0.875rem;
+    color: #71717a;
+  }
+  .results { margin-top: 32px; }
+  .result-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    background: #18181b;
+  }
+  .result-row.best { background: #1c2535; border: 1px solid #6366f1; }
+  .result-code {
+    font-weight: 700;
+    font-size: 1.1rem;
+    min-width: 60px;
+    text-align: center;
+    font-family: monospace;
+  }
+  .result-bar-wrap {
+    flex: 1;
+    height: 24px;
+    background: #27272a;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .result-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .result-bar.high { background: linear-gradient(90deg, #6366f1, #818cf8); }
+  .result-bar.med { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .result-bar.low { background: linear-gradient(90deg, #ef4444, #f87171); }
+  .result-stats {
+    font-size: 0.75rem;
+    color: #71717a;
+    min-width: 200px;
+    text-align: right;
+    font-family: monospace;
+  }
+  .verdict {
+    margin-top: 20px;
+    padding: 16px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+  }
+  .verdict.match { background: #052e16; color: #4ade80; border: 1px solid #16a34a; }
+  .verdict.likely { background: #1c1917; color: #fbbf24; border: 1px solid #a16207; }
+  .verdict.nomatch { background: #1c0a0a; color: #f87171; border: 1px solid #dc2626; }
+  .refs-info {
+    margin-top: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #18181b;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: #71717a;
+  }
+  .refs-info span { color: #a1a1aa; font-weight: 600; }
+  .reload-btn {
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    color: #a1a1aa;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+  }
+  .reload-btn:hover { background: #3f3f46; color: #e4e4e7; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎴 Card ID Detector</h1>
+  <p class="subtitle">Drop a card image to identify it against reference database</p>
+
+  <div class="upload-zone" id="dropzone">
+    <div class="icon">📁</div>
+    <p>Drop card image here or click to browse</p>
+    <input type="file" id="fileinput" accept="image/*">
+  </div>
+
+  <div id="preview">
+    <img id="previewimg" src="" alt="Preview">
+  </div>
+
+  <div id="status"></div>
+
+  <div class="results" id="results"></div>
+  <div class="verdict" id="verdict" style="display:none;"></div>
+
+  <div class="refs-info" id="refsinfo">
+    <span id="refs-text">Loading...</span>
+    <button class="reload-btn" id="reload-btn" onclick="reloadRefs()">↻ Reload</button>
+  </div>
+</div>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileinput = document.getElementById('fileinput');
+const preview = document.getElementById('preview');
+const previewimg = document.getElementById('previewimg');
+const status = document.getElementById('status');
+const resultsDiv = document.getElementById('results');
+const verdictDiv = document.getElementById('verdict');
+const refsinfo = document.getElementById('refsinfo');
+
+function loadRefs() {
+  fetch('/api/refs').then(r => r.json()).then(d => {
+    document.getElementById('refs-text').innerHTML = `Reference database: <span>${d.count}</span> cards — ${d.codes ? d.codes.join(', ') : 'none'}`;
+  }).catch(() => {
+    document.getElementById('refs-text').textContent = 'Reference database: unavailable';
+  });
+}
+
+function reloadRefs() {
+  document.getElementById('refs-text').textContent = 'Reloading...';
+  fetch('/api/refs/reload', { method: 'POST' }).then(r => r.json()).then(d => {
+    document.getElementById('refs-text').innerHTML = `Reference database: <span>${d.count}</span> cards reloaded`;
+  }).catch(() => {
+    document.getElementById('refs-text').textContent = 'Reload failed';
+  });
+}
+
+loadRefs();
+
+dropzone.addEventListener('click', () => fileinput.click());
+
+dropzone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+  dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+fileinput.addEventListener('change', e => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  // Preview
+  const reader = new FileReader();
+  reader.onload = e => {
+    previewimg.src = e.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+
+  // Upload and match
+  status.textContent = 'Processing...';
+  resultsDiv.innerHTML = '';
+  verdictDiv.style.display = 'none';
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  fetch('/api/match', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        status.textContent = '❌ ' + data.error;
+        return;
+      }
+      status.textContent = `Done — ${data.results.length} references compared`;
+      displayResults(data.results);
+      displayVerdict(data.results[0]);
+    })
+    .catch(err => {
+      status.textContent = '❌ Error: ' + err.message;
+    });
+}
+
+function displayResults(results) {
+  const html = results.slice(0, 10).map((r, i) => {
+    const isBest = i === 0;
+    const pct = Math.round(r.score * 100);
+    const cls = pct > 70 ? 'high' : pct > 40 ? 'med' : 'low';
+    return `
+      <div class="result-row ${isBest ? 'best' : ''}">
+        <div class="result-code">${r.code}</div>
+        <div class="result-bar-wrap">
+          <div class="result-bar ${cls}" style="width: ${pct}%"></div>
+        </div>
+        <div class="result-stats">
+          Hamming ${r.hamming} · Hist ${r.hist} · SSIM ${r.ssim}
+        </div>
+      </div>
+    `;
+  }).join('');
+  resultsDiv.innerHTML = html;
+}
+
+function displayVerdict(best) {
+  let cls, text;
+  if (best.hamming <= 6) {
+    cls = 'match';
+    text = `✅ Match: ${best.code} (Hamming ${best.hamming})`;
+  } else if (best.hamming <= 12 && best.hist > 0.9) {
+    cls = 'likely';
+    text = `🟡 Likely: ${best.code} (Hamming ${best.hamming}) — verify manually`;
+  } else {
+    cls = 'nomatch';
+    text = `❌ No confident match (closest: ${best.code} @ Hamming ${best.hamming})`;
+  }
+  verdictDiv.className = 'verdict ' + cls;
+  verdictDiv.textContent = text;
+  verdictDiv.style.display = 'block';
+}
+</script>
+</body>
+</html>

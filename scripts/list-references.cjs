@@ -16,11 +16,25 @@ if (!fs.existsSync(refDir) || fs.readdirSync(refDir).length === 0) {
 const files = fs.readdirSync(refDir).filter(f => /\.(png|jpg|jpeg|webp|bmp)$/i.test(f));
 files.sort();
 
-console.log(`\n  Reference images (${files.length}):\n`);
+// Group by code
+const byCode = {};
 for (const f of files) {
-  const stat = fs.statSync(path.join(refDir, f));
-  const kb = (stat.size / 1024).toFixed(1);
-  const code = path.basename(f, path.extname(f));
-  console.log(`    ${code.padEnd(8)} ${kb.padStart(8)} KB    ${f}`);
+  const ext = path.extname(f);
+  const base = path.basename(f, ext);
+  const m = base.match(/^([A-Za-z]+\d+)[-_\s]?\d*$/);
+  const code = m ? m[1].toUpperCase() : base.toUpperCase();
+  if (!byCode[code]) byCode[code] = [];
+  byCode[code].push({ file: f, size: fs.statSync(path.join(refDir, f)).size });
+}
+
+const codes = Object.keys(byCode).sort();
+
+console.log(`\n  Reference database: ${files.length} images, ${codes.length} cards\n`);
+
+for (const code of codes) {
+  const refs = byCode[code];
+  const sizes = refs.map(r => `${(r.size / 1024).toFixed(0)}KB`).join(' + ');
+  const count = refs.length > 1 ? ` (${refs.length} refs)` : '';
+  console.log(`    ${code.padEnd(8)} ${sizes.padEnd(20)}${count}`);
 }
 console.log('');
