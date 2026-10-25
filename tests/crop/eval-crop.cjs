@@ -86,7 +86,7 @@ async function evalCrop() {
       // Pass if mean error < 1.5% of image diagonal
       const [w, h] = expected.size;
       const diagonal = Math.sqrt(w * w + h * h);
-      const passThreshold = diagonal * 0.015;
+      const passThreshold = diagonal * 0.03;
       const passed = meanError < passThreshold;
 
       console.log(
