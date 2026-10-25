@@ -61,6 +61,9 @@ app.post('/api/crop', upload.single('image'), async (req, res) => {
       try { fs.unlinkSync(tmpPath); } catch {}
       res.set('Content-Type', 'image/jpeg');
       res.send(croppedBuf);
+    } else if (result.reason === 'no_valid_card') {
+      try { fs.unlinkSync(tmpPath); } catch {}
+      res.status(422).json({ error: 'No card detected. Please retake the photo with the card flat on a dark surface.' });
     } else {
       // No crop needed — return original as JPEG
       const sharp = require('sharp');
@@ -87,6 +90,13 @@ app.post('/api/match', upload.single('image'), async (req, res) => {
     const { hammingDistance } = require('../lib/phash');
 
     const inputNorm = await normalizeImage(tmpPath);
+
+    // Check if crop failed with retake reason
+    if (inputNorm.cropReason === 'no_valid_card') {
+      try { fs.unlinkSync(tmpPath); } catch {}
+      return res.status(422).json({ error: 'No card detected. Please retake the photo with the card flat on a dark surface.' });
+    }
+
     const refs = await getRefs();
 
     // Group by code, take best (lowest Hamming) per code

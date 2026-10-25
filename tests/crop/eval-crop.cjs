@@ -43,8 +43,13 @@ async function evalCrop() {
       const result = await cropToCardFace(imgPath);
 
       if (!result.detected) {
-        console.log(`✗ ${name}: no card detected`);
-        results.push({ name, error: null, detected: false });
+        const reason = result.reason || 'unknown';
+        if (reason === 'no_valid_card') {
+          console.log(`⊘ ${name}: no valid card (ring gate rejected all candidates)`);
+        } else {
+          console.log(`✗ ${name}: no card detected (${reason})`);
+        }
+        results.push({ name, error: null, detected: false, reason });
         continue;
       }
 
