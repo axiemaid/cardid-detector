@@ -45,6 +45,35 @@ app.get('/api/refs', async (req, res) => {
   }
 });
 
+// Crop preview endpoint — returns cropped image as JPEG
+app.post('/api/crop', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image provided' });
+
+    const tmpPath = path.join(require('os').tmpdir(), `cardid-crop-${Date.now()}.jpg`);
+    fs.writeFileSync(tmpPath, req.file.buffer);
+
+    const { cropToCardFace } = require('../lib/crop');
+    const result = await cropToCardFace(tmpPath);
+
+    if (result.detected && result.cropped) {
+      const croppedBuf = await result.cropped.jpeg({ quality: 85 }).toBuffer();
+      try { fs.unlinkSync(tmpPath); } catch {}
+      res.set('Content-Type', 'image/jpeg');
+      res.send(croppedBuf);
+    } else {
+      // No crop needed — return original as JPEG
+      const sharp = require('sharp');
+      const origBuf = await sharp(tmpPath).jpeg({ quality: 85 }).toBuffer();
+      try { fs.unlinkSync(tmpPath); } catch {}
+      res.set('Content-Type', 'image/jpeg');
+      res.send(origBuf);
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Match endpoint
 app.post('/api/match', upload.single('image'), async (req, res) => {
   try {

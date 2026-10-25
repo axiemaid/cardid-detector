@@ -41,6 +41,22 @@
     border-radius: 8px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.4);
   }
+  .preview-label {
+    font-size: 0.75rem;
+    color: #71717a;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .preview-row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .preview-col {
+    display: flex;
+    flex-direction: column;
+  }
   #status {
     margin-top: 16px;
     font-size: 0.875rem;
@@ -134,7 +150,16 @@
   </div>
 
   <div id="preview">
-    <img id="previewimg" src="" alt="Preview">
+    <div class="preview-row">
+      <div class="preview-col">
+        <div class="preview-label">Original</div>
+        <img id="origimg" src="" alt="Original">
+      </div>
+      <div class="preview-col">
+        <div class="preview-label">Cropped (for matching)</div>
+        <img id="cropimg" src="" alt="Cropped">
+      </div>
+    </div>
   </div>
 
   <div id="status"></div>
@@ -152,7 +177,8 @@
 const dropzone = document.getElementById('dropzone');
 const fileinput = document.getElementById('fileinput');
 const preview = document.getElementById('preview');
-const previewimg = document.getElementById('previewimg');
+const origimg = document.getElementById('origimg');
+const cropimg = document.getElementById('cropimg');
 const status = document.getElementById('status');
 const resultsDiv = document.getElementById('results');
 const verdictDiv = document.getElementById('verdict');
@@ -199,13 +225,26 @@ fileinput.addEventListener('change', e => {
 });
 
 function handleFile(file) {
-  // Preview
+  // Show original preview immediately
   const reader = new FileReader();
   reader.onload = e => {
-    previewimg.src = e.target.result;
+    origimg.src = e.target.result;
+    cropimg.src = ''; // clear old crop
     preview.style.display = 'block';
   };
   reader.readAsDataURL(file);
+
+  // Fetch cropped preview
+  const cropForm = new FormData();
+  cropForm.append('image', file);
+  fetch('/api/crop', { method: 'POST', body: cropForm })
+    .then(r => r.blob())
+    .then(blob => {
+      cropimg.src = URL.createObjectURL(blob);
+    })
+    .catch(() => {
+      cropimg.alt = 'No crop needed';
+    });
 
   // Upload and match
   status.textContent = 'Processing...';
