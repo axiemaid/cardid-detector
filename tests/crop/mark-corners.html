@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Card Corner Marker</title>
+<style>
+  body { margin: 0; background: #1a1a1a; color: #eee; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+  h1 { font-size: 18px; margin: 0 0 10px; }
+  .info { font-size: 13px; color: #aaa; margin-bottom: 15px; text-align: center; max-width: 600px; }
+  .canvas-wrap { position: relative; max-width: 95vw; max-height: 70vh; overflow: auto; border: 2px solid #444; border-radius: 8px; }
+  canvas { display: block; cursor: crosshair; }
+  .labels { margin-top: 15px; font-size: 14px; font-family: monospace; }
+  .labels div { margin: 2px 0; }
+  .corner-display { color: #4CAF50; }
+  .corner-pending { color: #888; }
+  .buttons { margin-top: 15px; display: flex; gap: 10px; }
+  button { padding: 8px 20px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+  .reset { background: #f44336; color: white; }
+  .copy { background: #2196F3; color: white; }
+  .copy:hover { background: #1976D2; }
+  .output { margin-top: 15px; width: 100%; max-width: 600px; }
+  textarea { width: 100%; height: 120px; background: #111; color: #0f0; border: 1px solid #333; border-radius: 4px; padding: 8px; font-family: monospace; font-size: 13px; resize: vertical; }
+  .file-info { font-size: 12px; color: #666; margin-top: 5px; }
+  .order-hint { font-size: 11px; color: #666; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>🎴 Card Corner Marker</h1>
+<div class="info">
+  Click the four corners of the <b>card</b> (not the sleeve) in order:<br>
+  <span style="color:#e44">Top-Left</span> → <span style="color:#4af">Top-Right</span> → <span style="color:#4f4">Bottom-Right</span> → <span style="color:#fe4">Bottom-Left</span>
+</div>
+<input type="file" id="fileInput" accept="image/*" />
+<div class="file-info" id="fileInfo"></div>
+<div class="canvas-wrap" id="canvasWrap">
+  <canvas id="canvas"></canvas>
+</div>
+<div class="labels" id="labels">
+  <div class="corner-pending">1. Top-Left: (click to mark)</div>
+  <div class="corner-pending">2. Top-Right: (pending)</div>
+  <div class="corner-pending">3. Bottom-Right: (pending)</div>
+  <div class="corner-pending">4. Bottom-Left: (pending)</div>
+</div>
+<div class="buttons">
+  <button class="reset" onclick="resetCorners()">Reset</button>
+  <button class="copy" onclick="copyJSON()">Copy JSON</button>
+</div>
+<div class="output">
+  <textarea id="output" readonly placeholder="JSON output will appear here after all 4 corners are marked..."></textarea>
+</div>
+<div class="order-hint">Tip: Mark the card's brown border edge, not the sleeve edge.</div>
+
+<script>
+const labels = ['Top-Left', 'Top-Right', 'Bottom-Right', 'Bottom-Left'];
+const colors = ['#e44', '#4af', '#4f4', '#fe4'];
+const keys = ['tl', 'tr', 'br', 'bl'];
+let corners = [];
+let img = null;
+let scale = 1;
+let naturalW = 0, naturalH = 0;
+let filename = '';
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const labelsDiv = document.getElementById('labels');
+const output = document.getElementById('output');
+const fileInfo = document.getElementById('fileInfo');
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  filename = file.name;
+  fileInfo.textContent = filename;
+  const url = URL.createObjectURL(file);
+  const tmp = new Image();
+  tmp.onload = () => {
+    naturalW = tmp.naturalWidth;
+    naturalH = tmp.naturalHeight;
+    // Scale to fit ~800px max dimension
+    scale = Math.min(1, 800 / Math.max(naturalW, naturalH));
+    canvas.width = naturalW * scale;
+    canvas.height = naturalH * scale;
+    ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+    img = tmp;
+    resetCorners();
+  };
+  tmp.src = url;
+});
+
+canvas.addEventListener('click', (e) => {
+  if (corners.length >= 4) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / scale;
+  const y = (e.clientY - rect.top) / scale;
+  corners.push([Math.round(x), Math.round(y)]);
+  redraw();
+  updateLabels();
+  if (corners.length === 4) {
+    generateJSON();
+  }
+});
+
+function redraw() {
+  if (!img) return;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < corners.length; i++) {
+    const cx = corners[i][0] * scale;
+    const cy = corners[i][1] * scale;
+    // Draw crosshair
+    ctx.strokeStyle = colors[i];
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 10, cy);
+    ctx.lineTo(cx + 10, cy);
+    ctx.moveTo(cx, cy - 10);
+    ctx.lineTo(cx, cy + 10);
+    ctx.stroke();
+    // Draw circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
+    ctx.stroke();
+    // Draw label
+    ctx.fillStyle = colors[i];
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(labels[i], cx + 12, cy - 8);
+  }
+  // Draw quad if complete
+  if (corners.length === 4) {
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const p = corners[i];
+      if (i === 0) ctx.moveTo(p[0] * scale, p[1] * scale);
+      else ctx.lineTo(p[0] * scale, p[1] * scale);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function updateLabels() {
+  let html = '';
+  for (let i = 0; i < 4; i++) {
+    if (i < corners.length) {
+      html += `<div class="corner-display">${i + 1}. ${labels[i]}: [${corners[i][0]}, ${corners[i][1]}]</div>`;
+    } else {
+      html += `<div class="corner-pending">${i + 1}. ${labels[i]}: (pending)</div>`;
+    }
+  }
+  labelsDiv.innerHTML = html;
+}
+
+function generateJSON() {
+  const entry = {
+    [filename]: {
+      size: [naturalW, naturalH],
+      corners: {
+        tl: corners[0],
+        tr: corners[1],
+        br: corners[2],
+        bl: corners[3]
+      }
+    }
+  };
+  output.value = JSON.stringify(entry, null, 2);
+}
+
+function resetCorners() {
+  corners = [];
+  output.value = '';
+  updateLabels();
+  redraw();
+}
+
+function copyJSON() {
+  if (output.value) {
+    navigator.clipboard.writeText(output.value);
+    const btn = document.querySelector('.copy');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1000);
+  }
+}
+</script>
+</body>
+</html>

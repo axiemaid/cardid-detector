@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+references/
+
+# Large source scans - refs.json is precomputed locally
+
+# Test images — dev only, not needed for deployment
+test-images/

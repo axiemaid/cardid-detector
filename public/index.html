@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Card ID Detector</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0f1117; --surface: #18181b; --surface2: #1c1c25;
+    --border: #3f3f46; --text: #e4e4e7; --muted: #71717a;
+    --accent: #6366f1; --accent2: #818cf8;
+    --green: #4ade80; --green-bg: #052e16; --green-border: #16a34a;
+    --yellow: #fbbf24; --yellow-bg: #1c1917; --yellow-border: #a16207;
+    --red: #f87171; --red-bg: #1c0a0a; --red-border: #dc2626;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 16px;
+  }
+  .container { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 2px; }
+  .subtitle { color: var(--muted); font-size: 0.82rem; margin-bottom: 20px; }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 36px 16px; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s; background: var(--surface);
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent); background: var(--surface2);
+  }
+  .upload-zone .icon { font-size: 2.5rem; margin-bottom: 8px; }
+  .upload-zone p { color: var(--muted); font-size: 0.8rem; }
+  .upload-zone input { display: none; }
+
+  /* Loading */
+  #loading {
+    display: none; margin-top: 16px; text-align: center;
+    color: var(--muted); font-size: 0.85rem;
+  }
+  #loading .spinner {
+    display: inline-block; width: 20px; height: 20px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-right: 8px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading .step { margin: 4px 0; }
+  #loading .step.done { color: var(--green); }
+  #loading .step.active { color: var(--accent2); }
+
+  /* Preview */
+  #preview { margin-top: 16px; display: none; }
+  .preview-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .preview-col { display: flex; flex-direction: column; }
+  .preview-label {
+    font-size: 0.7rem; color: var(--muted); margin-bottom: 4px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  #preview img {
+    max-width: 280px; width: 100%; border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  /* Results */
+  .results { margin-top: 20px; }
+  .result-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: 8px; margin-bottom: 6px;
+    background: var(--surface);
+  }
+  .result-row.best { background: #1c2535; border: 1px solid var(--accent); }
+  .result-code {
+    font-weight: 700; font-size: 1rem; min-width: 50px;
+    text-align: center; font-family: monospace;
+  }
+  .result-bar-wrap { flex: 1; height: 20px; background: #27272a; border-radius: 4px; overflow: hidden; }
+  .result-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+  .result-bar.high { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .result-bar.med { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .result-bar.low { background: linear-gradient(90deg, #ef4444, #f87171); }
+  .result-stats {
+    font-size: 0.7rem; color: var(--muted); min-width: 160px;
+    text-align: right; font-family: monospace;
+  }
+  .verdict {
+    margin-top: 16px; padding: 14px 18px; border-radius: 8px;
+    font-size: 0.95rem; font-weight: 600; text-align: center;
+  }
+  .verdict.match { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+  .verdict.likely { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow-border); }
+  .verdict.nomatch { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+
+  /* Supported cards */
+  .supported {
+    margin-top: 24px; padding: 12px 16px;
+    background: var(--surface); border-radius: 8px;
+    font-size: 0.75rem; color: var(--muted);
+  }
+  .supported-title { font-weight: 600; color: var(--text); margin-bottom: 6px; font-size: 0.8rem; }
+  .supported-codes {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+  }
+  .code-badge {
+    background: var(--surface2); padding: 2px 8px; border-radius: 4px;
+    font-family: monospace; font-size: 0.72rem; color: var(--accent2);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎴 Card ID Detector</h1>
+  <p class="subtitle">Scan a card to identify it. All processing happens in your browser — no upload.</p>
+
+  <div class="upload-zone" id="dropzone">
+    <div class="icon">📷</div>
+    <p>Drop image, click to browse, or use camera</p>
+    <input type="file" id="fileinput" accept="image/*" capture="environment">
+  </div>
+
+  <div id="loading">
+    <div class="spinner"></span><span id="loading-text">Initializing...</span></div>
+    <div id="loading-steps"></div>
+  </div>
+
+  <div id="preview">
+    <div class="preview-row">
+      <div class="preview-col">
+        <div class="preview-label">Original</div>
+        <img id="origimg" src="" alt="Original">
+      </div>
+      <div class="preview-col" id="crop-col">
+        <div class="preview-label">Cropped</div>
+        <img id="cropimg" src="" alt="Cropped">
+      </div>
+    </div>
+  </div>
+
+  <div class="results" id="results"></div>
+  <div class="verdict" id="verdict" style="display:none;"></div>
+
+  <div class="supported" id="supported" style="display:none;">
+    <div class="supported-title">Which cards are supported?</div>
+    <div id="supported-text"></div>
+    <div class="supported-codes" id="supported-codes"></div>
+  </div>
+</div>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>

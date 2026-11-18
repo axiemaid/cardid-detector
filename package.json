@@ -1,0 +1,20 @@
+{
+  "name": "cardid-detector",
+  "version": "0.2.0",
+  "description": "Card identity detector — template matching approach for Hyper Battle card identification",
+  "type": "commonjs",
+  "main": "lib/match.js",
+  "scripts": {
+    "match": "node scripts/match.cjs",
+    "add-ref": "node scripts/add-reference.cjs",
+    "list-refs": "node scripts/list-references.cjs",
+    "build-refs": "node scripts/build-refs.cjs",
+    "build": "node scripts/build-refs.cjs"
+  },
+  "dependencies": {
+    "@techstark/opencv-js": "^5.0.0-release.1",
+    "express": "^5.3.0",
+    "multer": "^2.5.0",
+    "sharp": "^0.33.0"
+  }
+}
